@@ -3,101 +3,120 @@
 WTC-MKDTX8Y5
 
 ## Overview
-
-FailSafe is an offline-first rural clinic data engineering prototype. It is
-intended to help a clinic collect and validate operational data when internet
-connectivity is unreliable, store that data locally, and make it available to
-other services through a documented API.
-
-This repository is being developed incrementally. The current foundation is
-a small FastAPI application with a health-check endpoint and an automated
-test. The data ingestion, SQLite persistence, offline workflow, and HealthSafe
-integration are planned milestones, not features claimed as complete.
-
-## Project goals
-
-- Accept structured clinic data using a clearly defined schema.
-- Validate and clean incoming records before storing them.
-- Persist records locally with SQLite so basic clinic workflows do not depend
-  on a live internet connection.
-- Expose data through REST endpoints with JSON responses.
-- Provide a later synchronisation boundary for connectivity-restored workflows.
-- Demonstrate integration with the separate HealthSafe project through APIs.
-
-## Current implementation
-
-- FastAPI application in `failsafe/main.py`.
-- `GET /health` endpoint for a basic service health check.
-- Automated endpoint test in `tests/test_health.py`.
-
-## Planned architecture
-
-1. **Data model:** define the clinic records and validation rules.
-2. **Ingestion:** accept sample CSV data and report invalid rows.
-3. **Persistence:** store valid records in a local SQLite database.
-4. **API:** retrieve stored records as JSON.
-5. **Offline behaviour:** prove that locally stored records remain available
-   without network access.
-6. **Integration:** allow HealthSafe to consume selected data through the API.
-7. **Synchronisation prototype:** define and test how locally captured records
-   could be queued for later synchronisation.
-
-## Technology
-
-- Python 3.11+
-- FastAPI
-- SQLite (planned for the persistence milestone)
-- Pytest and HTTPX
-
-## Run locally
-
-Create and activate a virtual environment:
-
-```bash
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Start the API:
-
-```bash
-uvicorn failsafe.main:app --reload
-```
-
-Open the interactive API documentation at `http://127.0.0.1:8000/docs`.
-Check the service at `http://127.0.0.1:8000/health`.
-
-Run automated tests:
-
-```bash
-pytest
-```
-
-## Data and safety note
+FailSafe is an offline-first rural clinic data engineering prototype. It
+collects aggregate clinic operational metrics, validates them, stores them in
+a local SQLite database, provides analytics, and exposes a pull-based
+synchronisation interface for connected systems such as HealthSafe.
 
 This is a learning prototype, not a production clinical system. Use synthetic
-or appropriately de-identified data only. It is not intended to store real
-patient-identifiable or clinical information.
+or de-identified aggregate data only. Do not submit patient names, identity
+numbers, contact details, diagnoses, or other identifiable health information.
 
-## Development history
+## Features
+- FastAPI REST API and interactive OpenAPI documentation.
+- SQLite local persistence; writing records does not require internet access.
+- Pydantic validation for clinic codes, dates, text and non-negative metrics.
+- CSV ingestion with row-level validation and rejected-row reporting.
+- Filtering and pagination for stored records.
+- SQL analytics grouped by clinic, department and metric.
+- Pending-sync queue for HealthSafe to pull and acknowledge.
+- Pytest suite and GitHub Actions test workflow.
+- Synthetic sample dataset at data/sample_clinic_metrics.csv.
 
-Work is organised into small feature branches and meaningful commits. Each
-milestone should include tests and documentation before it is merged into
-`main`.
+## Architecture
+    CSV / local clinic capture
+              |
+              v
+          FastAPI API
+              |
+       Pydantic validation
+              |
+              v
+       SQLite local database
+          |           |
+          v           v
+       Analytics   Pending sync queue
+                       |
+                connectivity returns
+                       |
+                       v
+              HealthSafe pulls records
+
+FailSafe owns its database. HealthSafe integrates through the API and must not
+connect directly to the SQLite file. HealthSafe should acknowledge records
+only after successfully processing them.
+
+## Technology
+Python 3.11+, FastAPI, Pydantic, SQLite, Pytest and HTTPX.
+
+## Setup
+    git clone https://github.com/Symphorose-Tshibombi-dev/FailSafe.git
+    cd FailSafe
+    git switch feature/project-foundation
+    python -m venv .venv
+
+Windows PowerShell:
+    .venv\Scripts\Activate.ps1
+
+macOS/Linux:
+    source .venv/bin/activate
+
+Install and run:
+    pip install -r requirements.txt
+    uvicorn failsafe.main:app --reload
+
+Open http://127.0.0.1:8000/docs for API documentation. The default database
+is data/failsafe.db. Set FAILSAFE_DB_PATH to select another local database.
+
+## API reference
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | /health | Service status and record count |
+| POST | /records | Validate and store one aggregate metric |
+| GET | /records | List records; optional clinic_code, limit, offset |
+| GET | /records/{record_id} | Retrieve one record |
+| POST | /ingest/csv | Import CSV sent as text/csv |
+| GET | /analytics/summary | Aggregate by clinic, department and metric |
+| GET | /sync/pending | Records awaiting HealthSafe synchronisation |
+| POST | /sync/acknowledge | Mark received record IDs as synchronised |
+
+Example record:
+    {
+      "clinic_code": "CLINIC-001",
+      "reporting_date": "2026-10-01",
+      "department": "Outpatient",
+      "metric": "visits",
+      "value": 68,
+      "unit": "visits"
+    }
+
+Import the sample CSV by sending its contents as the raw body to POST
+/ingest/csv with Content-Type: text/csv. The response includes imported and
+rejected row counts and row-level errors. Valid rows are retained even when
+another row is rejected.
+
+## HealthSafe synchronisation handshake
+1. HealthSafe requests GET /sync/pending when connectivity is available.
+2. HealthSafe validates and stores the returned records in its own system.
+3. After successful processing, HealthSafe posts accepted record_ids to
+   /sync/acknowledge.
+4. Unacknowledged records remain pending and can be requested again.
+
+This is a prototype contract, not a secure production sync protocol.
+Authentication, encryption configuration, conflict resolution, retry backoff,
+audit controls and deployment hardening remain future work.
+
+## Tests
+Run pytest. Tests use a temporary SQLite database and do not write into the
+working database.
+
+## Limitations and safety
+- Sample data is synthetic and contains no patient identities.
+- Offline data remains local until a connected system pulls it.
+- No automatic network transfer occurs while offline.
+- Not suitable for clinical decisions or production patient data.
+- WTC-MKDTX8Y5 is the original verification code and is preserved.
+
+## Development status
+The implementation is on feature/project-foundation. The main branch remains
+unchanged until local verification and review are complete.
