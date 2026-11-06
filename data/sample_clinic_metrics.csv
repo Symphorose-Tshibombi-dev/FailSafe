@@ -1,0 +1,6 @@
+clinic_code,reporting_date,department,metric,value,unit
+CLINIC-001,2026-10-01,Maternity,visits,24,visits
+CLINIC-001,2026-10-01,Outpatient,visits,68,visits
+CLINIC-001,2026-10-01,Pharmacy,stockouts,3,items
+CLINIC-002,2026-10-02,Outpatient,visits,51,visits
+CLINIC-002,2026-10-02,Maternity,visits,17,visits
